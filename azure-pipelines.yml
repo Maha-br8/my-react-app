@@ -2,7 +2,6 @@ trigger:
 - main
 
 stages:
-# ===== Build Stage =====
 - stage: Build
   jobs:
   - job: Build
@@ -13,11 +12,13 @@ stages:
       inputs:
         versionSpec: '18.x'
       displayName: 'Install Node.js'
+
     - script: |
         npm install -g serve
         npm install
         npm run build
-      displayName: 'Build React App'
+      displayName: 'Install & Build React App'
+
     - task: ArchiveFiles@2
       inputs:
         rootFolderOrFile: 'build'
@@ -25,13 +26,13 @@ stages:
         archiveType: 'zip'
         archiveFile: '$(Build.ArtifactStagingDirectory)/build.zip'
         replaceExistingArchive: true
+
     - task: PublishBuildArtifacts@1
       inputs:
         PathtoPublish: '$(Build.ArtifactStagingDirectory)/build.zip'
         ArtifactName: 'drop'
         publishLocation: 'Container'
 
-# ===== Deploy to Staging =====
 - stage: DeployStaging
   dependsOn: Build
   jobs:
@@ -42,32 +43,37 @@ stages:
     - task: DownloadBuildArtifacts@0
       inputs:
         artifactName: 'drop'
+
     - task: AzureRmWebAppDeployment@5
       inputs:
         ConnectionType: 'AzureRM'
         azureSubscription: 'azure-react-connection'
         appType: 'webAppLinux'
-        WebAppName: 'my-react-app-staging'
+        WebAppName: 'maha-react-app-staging'
         packageForLinux: '$(System.ArtifactsDirectory)/drop/build.zip'
         RuntimeStack: 'NODE|18-lts'
 
-# ===== Deploy to Production =====
 - stage: DeployProd
   dependsOn: DeployStaging
   condition: succeeded()
   jobs:
-  - job: DeployProd
+  - deployment: DeployProd
+    environment: production  # This enables approvals in Azure DevOps UI
     pool:
       vmImage: 'ubuntu-latest'
-    steps:
-    - task: DownloadBuildArtifacts@0
-      inputs:
-        artifactName: 'drop'
-    - task: AzureRmWebAppDeployment@5
-      inputs:
-        ConnectionType: 'AzureRM'
-        azureSubscription: 'azure-react-connection'
-        appType: 'webAppLinux'
-        WebAppName: 'my-react-app-prod'
-        packageForLinux: '$(System.ArtifactsDirectory)/drop/build.zip'
-        RuntimeStack: 'NODE|18-lts'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: DownloadBuildArtifacts@0
+            inputs:
+              artifactName: 'drop'
+
+          - task: AzureRmWebAppDeployment@5
+            inputs:
+              ConnectionType: 'AzureRM'
+              azureSubscription: 'azure-react-connection'
+              appType: 'webAppLinux'
+              WebAppName: 'maha-react-app-prod'  # Replace with your real production app name
+              packageForLinux: '$(System.ArtifactsDirectory)/drop/build.zip'
+              RuntimeStack: 'NODE|18-lts'
