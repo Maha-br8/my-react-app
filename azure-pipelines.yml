@@ -12,11 +12,17 @@ stages:
       inputs:
         versionSpec: '18.x'
       displayName: 'Install Node.js'
+
     - script: |
         npm install -g serve
         npm install
         npm run build
       displayName: 'Install & Build React App'
+
+    - script: |
+        echo "<h1>App is offline for deployment</h1>" > build/app_offline.htm
+      displayName: 'Add app_offline.htm to build folder'
+
     - task: ArchiveFiles@2
       inputs:
         rootFolderOrFile: 'build'
@@ -24,6 +30,7 @@ stages:
         archiveType: 'zip'
         archiveFile: '$(Build.ArtifactStagingDirectory)/build.zip'
         replaceExistingArchive: true
+
     - task: PublishBuildArtifacts@1
       inputs:
         PathtoPublish: '$(Build.ArtifactStagingDirectory)/build.zip'
@@ -40,11 +47,12 @@ stages:
     - task: DownloadBuildArtifacts@0
       inputs:
         artifactName: 'drop'
+
     - task: AzureRmWebAppDeployment@5
       inputs:
         ConnectionType: 'AzureRM'
-        azureSubscription: 'azure-react-connection'
+        azureSubscription: 'azure-react-connection'  # Make sure this matches your actual service connection
         appType: 'webAppLinux'
-        WebAppName: 'maha-react-app'
+        WebAppName: 'maha-react-app'                 # Replace with your actual app name
         packageForLinux: '$(System.ArtifactsDirectory)/drop/build.zip'
         RuntimeStack: 'NODE|18-lts'
