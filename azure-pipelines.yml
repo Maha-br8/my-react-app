@@ -2,6 +2,7 @@ trigger:
 - main
 
 stages:
+# ===== Build Stage =====
 - stage: Build
   jobs:
   - job: Build
@@ -12,17 +13,11 @@ stages:
       inputs:
         versionSpec: '18.x'
       displayName: 'Install Node.js'
-
     - script: |
         npm install -g serve
         npm install
         npm run build
-      displayName: 'Install & Build React App'
-
-    - script: |
-        echo "<h1>App is offline for deployment</h1>" > build/app_offline.htm
-      displayName: 'Add app_offline.htm to build folder'
-
+      displayName: 'Build React App'
     - task: ArchiveFiles@2
       inputs:
         rootFolderOrFile: 'build'
@@ -30,29 +25,49 @@ stages:
         archiveType: 'zip'
         archiveFile: '$(Build.ArtifactStagingDirectory)/build.zip'
         replaceExistingArchive: true
-
     - task: PublishBuildArtifacts@1
       inputs:
         PathtoPublish: '$(Build.ArtifactStagingDirectory)/build.zip'
         ArtifactName: 'drop'
         publishLocation: 'Container'
 
-- stage: Deploy
+# ===== Deploy to Staging =====
+- stage: DeployStaging
   dependsOn: Build
   jobs:
-  - job: Deploy
+  - job: DeployStaging
     pool:
       vmImage: 'ubuntu-latest'
     steps:
     - task: DownloadBuildArtifacts@0
       inputs:
         artifactName: 'drop'
-
     - task: AzureRmWebAppDeployment@5
       inputs:
         ConnectionType: 'AzureRM'
-        azureSubscription: 'azure-react-connection'  # Make sure this matches your actual service connection
+        azureSubscription: 'azure-react-connection'
         appType: 'webAppLinux'
-        WebAppName: 'maha-react-app'                 # Replace with your actual app name
+        WebAppName: 'my-react-app-staging'
+        packageForLinux: '$(System.ArtifactsDirectory)/drop/build.zip'
+        RuntimeStack: 'NODE|18-lts'
+
+# ===== Deploy to Production =====
+- stage: DeployProd
+  dependsOn: DeployStaging
+  condition: succeeded()
+  jobs:
+  - job: DeployProd
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: DownloadBuildArtifacts@0
+      inputs:
+        artifactName: 'drop'
+    - task: AzureRmWebAppDeployment@5
+      inputs:
+        ConnectionType: 'AzureRM'
+        azureSubscription: 'azure-react-connection'
+        appType: 'webAppLinux'
+        WebAppName: 'my-react-app-prod'
         packageForLinux: '$(System.ArtifactsDirectory)/drop/build.zip'
         RuntimeStack: 'NODE|18-lts'
