@@ -1,79 +1,18 @@
 trigger:
 - main
 
-stages:
-- stage: Build
-  jobs:
-  - job: Build
-    pool:
-      vmImage: 'ubuntu-latest'
-    steps:
-    - task: NodeTool@0
-      inputs:
-        versionSpec: '18.x'
-      displayName: 'Install Node.js'
+pool:
+  vmImage: 'ubuntu-latest'
 
-    - script: |
-        npm install -g serve
-        npm install
-        npm run build
-      displayName: 'Install & Build React App'
-
-    - task: ArchiveFiles@2
-      inputs:
-        rootFolderOrFile: 'build'
-        includeRootFolder: false
-        archiveType: 'zip'
-        archiveFile: '$(Build.ArtifactStagingDirectory)/build.zip'
-        replaceExistingArchive: true
-
-    - task: PublishBuildArtifacts@1
-      inputs:
-        PathtoPublish: '$(Build.ArtifactStagingDirectory)/build.zip'
-        ArtifactName: 'drop'
-        publishLocation: 'Container'
-
-- stage: DeployStaging
-  dependsOn: Build
-  jobs:
-  - job: DeployStaging
-    pool:
-      vmImage: 'ubuntu-latest'
-    steps:
-    - task: DownloadBuildArtifacts@0
-      inputs:
-        artifactName: 'drop'
-
-    - task: AzureRmWebAppDeployment@5
-      inputs:
-        ConnectionType: 'AzureRM'
-        azureSubscription: 'azure-react-connection'
-        appType: 'webAppLinux'
-        WebAppName: 'maha-react-app-staging'
-        packageForLinux: '$(System.ArtifactsDirectory)/drop/build.zip'
-        RuntimeStack: 'NODE|18-lts'
-
-- stage: DeployProd
-  dependsOn: DeployStaging
-  condition: succeeded()
-  jobs:
-  - deployment: DeployProd
-    environment: production  # This enables approvals in Azure DevOps UI
-    pool:
-      vmImage: 'ubuntu-latest'
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - task: DownloadBuildArtifacts@0
-            inputs:
-              artifactName: 'drop'
-
-          - task: AzureRmWebAppDeployment@5
-            inputs:
-              ConnectionType: 'AzureRM'
-              azureSubscription: 'azure-react-connection'
-              appType: 'webAppLinux'
-              WebAppName: 'maha-react-app-prod'  # Replace with your real production app name
-              packageForLinux: '$(System.ArtifactsDirectory)/drop/build.zip'
-              RuntimeStack: 'NODE|18-lts'
+steps:
+- task: AzureCLI@2
+  inputs:
+    azureSubscription: 'AzureConnection'   # 🔁 Replace with your service connection name
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      az group create --name react-bicep-rg --location "East US"
+      az deployment group create \
+        --resource-group react-bicep-rg \
+        --template-file main.bicep \
+        --parameters webAppName=my-react-app-service appServicePlanName=myAppPlan
